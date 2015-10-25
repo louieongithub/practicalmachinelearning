@@ -1,0 +1,124 @@
+---
+title: "Prediction Assignment"
+author: "Louie Sakellaris"
+date: "23 October 2015"
+output: html_document
+---
+## Introduction
+
+In this assignment the goal is to use data from accelerometers on human subjects to predict  if certain exercises were performed correctly. Futher information is available here : http://groupware.les.inf.puc-rio.br/har
+
+## Data Source
+
+http://groupware.les.inf.puc-rio.br/har
+
+## Reading data
+
+
+```{r}
+fileUrl<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl,destfile="pml-training.csv",method="curl")
+pml.training<-read.csv("pml-training.csv",stringsAsFactors=FALSE)
+fileUrl2<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl2,destfile="pml.testing.csv",method="curl")
+pml.testing<-read.csv("pml.testing.csv",stringsAsFactors=FALSE)
+```
+
+
+
+```{r}
+pml.training$classe<-as.factor(pml.training$classe)
+```
+
+
+```{r}
+dim(pml.training)
+```
+## Selecting variables with most data
+Many variables of our data contain a high number of NA's. In order to tidy up the data  I'll use the following code. 
+```{r}
+f1<-function(x) sum(is.na(x))
+
+totalnas<-sapply(pml.training,f1)
+lownas<-totalnas[totalnas<19000]
+lowNaVariables<-names(lownas)
+
+```
+
+```{r}
+numericVariables<-sapply(pml.training[lowNaVariables],is.numeric)
+y=NULL; y<-ifelse(numericVariables==TRUE,y<-c(y,numericVariables),y)
+numericVariableswithlowNas<-names(y[y])
+```
+
+```{r}
+pml.training$classe<-as.factor(pml.training$classe)
+data1<-pml.training[,numericVariableswithlowNas]
+```
+
+```{r}
+data<-data1[,-1]
+```
+## Variables of our selected data
+
+```{r}
+names(data)
+```
+
+```{r}
+data$classe<-pml.training$classe
+```
+
+```{r}
+dim(data)
+```
+## Spliting our dataframe into  training and testing sets
+```{r}
+library(caret)
+inTrain<-createDataPartition(y=data$classe,p=0.75,list=FALSE)
+training<-data[inTrain,]
+testing<-data[-inTrain,]
+```
+
+```{r}
+dim(training)
+```
+
+```{r}
+dim(testing)
+```
+## Fitting our model using Stochastic Gradient Boosting
+
+This model was chosen for its robustness and performance. 
+```{r}
+modFit<-train(classe~.,method="gbm",data=training, verbose=FALSE)
+print(modFit)
+```
+## Error rate and accuracy 
+
+The following confusion matrix shows prediction accuracy of the model when cross validated using the  testing set. An out of sample error rate is calculated to be  1-accuracy of pediction performance. The testing set data has not been used to train this model.
+```{r}
+cM<-confusionMatrix(testing$classe,predict(modFit,testing))
+out.of.sample.error.rate<-1-cM$overall[1]
+names(out.of.sample.error.rate)<-"Out Of Sample Error Rate"
+ooserCI<-1-cM$overall[3:4]
+names(ooserCI)<-c("Upper 95% CI","Lower 95% CI")
+print(c(out.of.sample.error.rate,ooserCI[2:1]))
+print(cM)
+```
+## Application of machine learning algorithm to the 20 test cases.
+```{r}
+testing.pml1<-pml.testing[,numericVariableswithlowNas]
+testing.pml<-testing.pml1[-1]
+```
+
+```{r}
+predictions<-predict(modFit,newdata = testing.pml)
+print(predictions)
+```
+## Acknowledgements
+I would like to thank the following group for allowing us the use of their data: 
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3pOaNPmy6 
